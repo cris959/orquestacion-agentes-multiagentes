@@ -1,0 +1,16 @@
+# Ignorar el archivo de variables de entorno (Claves de Gemini, Groq, etc.)
+.env
+
+# Ignorar el entorno virtual de Python
+.venv/
+venv/
+env/
+
+# Ignorar carpetas ocultas de VS Code y el sistema
+.vscode/
+.DS_Store
+
+# Ignorar archivos temporales y caché de Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
