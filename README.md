@@ -65,3 +65,9 @@ GROQ_API_KEY=gsk_YourGroqSecretKeyHere
 # Herramientas de Búsqueda Avanzada para Agentes (Web Search)
 TAVILY_API_KEY=tvly-YourTavilyKeyHere
 ```
+
+## 📝 Licencia
+
+Este proyecto está bajo la Licencia MIT. Para más detalles, consulta el archivo [LICENSE](https://github.com/cris959/orquestacion-agentes-multiagentes/blob/main/LICENSE) adjunto en este repositorio.
+
+Copyright © 2026 [Christian Garay](https://github.com//cris959/orquestacion-agentes-multiagentes) - Backend Developer.
