@@ -21,14 +21,14 @@ El experimento de hoy demostró la madurez del agente en un flujo de 3 pasos baj
 
 ```mermaid
 graph TD
-    A[User: Clima en Kansas] -->|Thread 22| B(LLM: Necesito Herramienta)
-    B --> C[Tavily Search: 27.2°C]
-    C -->|Guarda en SQLite| D[User: Clima en Buenos Aires]
-    D -->|Thread 22| E(LLM: Necesito Herramienta)
-    E --> F[Tavily Search: 14.3°C]
-    F -->|Guarda en SQLite| G[User: ¿Cuál está más caliente?]
-    G -->|Thread 22| H(LLM: Lee Historial SQLite)
-    H -->|Resolución Directa| I[Resultado: Kansas City 27.2°C > BA 14.3°C]
+    A["User: Clima en Kansas"] -->|Thread 22| B["LLM: Necesito Herramienta"]
+    B --> C["Tavily Search: 27.2°C"]
+    C -->|Guarda en SQLite| D["User: Clima en Buenos Aires"]
+    D -->|Thread 22| E["LLM: Necesito Herramienta"]
+    E --> F["Tavily Search: 14.3°C"]
+    F -->|Guarda en SQLite| G["User: ¿Cuál está más caliente?"]
+    G -->|Thread 22| H["LLM: Lee Historial SQLite"]
+    H -->|Resolución Directa| I["Resultado: Kansas City 27.2°C vs BA 14.3°C"]
 ```
 
 Análisis del Mensaje de Entrada (Payload Hidratado)

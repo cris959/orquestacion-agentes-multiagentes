@@ -13,4 +13,6 @@ env/
 # Ignorar archivos temporales y caché de Python
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
+.ipynb_checkpoints/Clase_03_Agente_de_Busqueda.ipynb
+
+Clase_03_Agente_de_Busqueda.ipynb
