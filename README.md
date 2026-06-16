@@ -1,70 +1,56 @@
 
-# 🤖 Orquestación de Agentes con Arquitectura ReAct
+## 🍽️ Scraper de Restaurantes de TripAdvisor con Selenium y BeautifulSoup
+Este módulo forma parte de un pipeline de datos e Inteligencia Artificial diseñado para extraer, estructurar y limpiar información real sobre establecimientos gastronómicos en Tulum, México. La data obtenida se procesa y organiza en diccionarios estandarizados listos para alimentar modelos de lenguaje (LLMs) o estructuras de análisis de datos (Pandas DataFrames).
 
-Este proyecto implementa un agente inteligente utilizando el patrón de diseño **ReAct** (Reasoning and Acting) para la gestión e interacción interactiva con un sistema de inventario simulado. 
+## ⚔️ La Batalla del Web Scraping: Desafíos y Soluciones
+Extraer datos de plataformas globales como TripAdvisor no es una tarea lineal. A lo largo del desarrollo de este script, nos enfrentamos a fuertes mecanismos de seguridad y cambios dinámicos en la interfaz que requirieron reestructurar la estrategia de raspado varias veces.
 
-Originalmente desarrollado sobre el ecosistema de Google Gemini, el backend fue migrado estratégicamente hacia **Groq (Llama 3.3)** para optimizar la velocidad de respuesta y evadir las estrictas limitaciones de cuota (*Rate Limits*) por IP.
+A continuación se detallan los principales obstáculos y cómo los vencimos:
 
----
+1. El Muro de Cloudflare (Sistemas Anti-Bot)
+* El Problema: Al ejecutar Selenium en modo oculto (**--headless**), TripAdvisor bloqueaba la sesión inmediatamente a través de Cloudflare. El script devolvía el código HTML de la pantalla de verificación humana y el título de la página quedaba congelado en tripadvisor.com, impidiendo ver el contenido real del restaurante.
 
-## 🧭 ¿Qué es la Arquitectura ReAct?
+* La Solución: * Se desactivó temporalmente el modo headless para permitir que el navegador emulara un entorno con monitor real.
 
-El patrón ReAct combina la capacidad de los Modelos de Lenguaje (LLMs) para generar trazas de razonamiento (*Reasoning*) junto con la ejecución de acciones específicas basadas en herramientas (*Acting*). El agente sigue un bucle continuo de tres pasos:
+* Se inyectaron argumentos avanzados a las opciones de Chrome para camuflar la automatización (**--disable-blink-features=AutomationControlled, excludeSwitches**).
 
-1. **Pensamiento (Thought):** El modelo analiza la entrada y decide qué necesita saber o hacer.
-2. **Acción (Action):** El modelo invoca una herramienta externa (ej. `consultar_stock`, `calcular_precio`).
-3. **Observación (Observation):** El sistema ejecuta el código en Python, le devuelve el resultado real al modelo, y este decide si ya puede dar la respuesta final o si necesita usar otra herramienta.
+* Se implementó un comando CDP (**Page.addScriptToEvaluateOnNewDocument**) en caliente para borrar la huella digital del objeto **navigator.webdriver**.
 
----
+* Se aumentó el tiempo de espera (**time.sleep(8)**) para permitir el handshake correcto de la página antes de capturar el árbol de elementos.
 
-## ⚡ El Desafío Técnico: De Gemini a Groq
+2. Redirección Involuntaria a URLs Individuales
+* El Problema: Las búsquedas iniciales del agente automatizado redirigían el script hacia la página de un único restaurante específico (como Wild Tulum), lo que rompía la lógica del bucle que buscaba listar múltiples tarjetas de locales comerciales en una sola corrida.
 
-### 1. El Problema (Google Gemini)
-Durante las pruebas con el modelo `gemini-2.5-flash`, el ciclo continuo de llamadas rápidas que requiere el bucle ReAct colapsó la cuota gratuita de la API de Google por minuto. Esto generaba errores de tipo `ResourceExhausted (429)` y bloqueos de IP prolongados (con penalizaciones de reintento de casi un minuto por interacción), rompiendo la experiencia interactiva por consola.
+* La Solución: Se interceptó el flujo inyectando manualmente la URL del listado general indexado de Tulum (**/Restaurants-g150813-...**), garantizando la presencia masiva de tarjetas en el HTML capturado.
 
-### 2. La Solución (Groq + Llama 3.3 70B)
-Para resolver la asfixia de la cuota, migramos el motor del agente al cliente de **Groq**, utilizando el modelo **`llama-3.3-70b-versatile`**. 
-* **Ventajas:** Procesamiento en milisegundos, latencia ultra baja y límites de cuota por minuto drásticamente más amplios para entornos de desarrollo.
-* **Control de Alucinaciones:** Se implementó el parámetro de parada `stop=["PAUSA", "Observación:"]` en la API de Groq para forzar al modelo a congelar su generación de texto inmediatamente después de declarar una acción. Esto evita que el LLM "invente" las respuestas de las herramientas y garantiza que Python tome el control de la lógica de negocio.
+3. Mutación de Clases CSS y Estructuras Dinámicas
+* El Problema: Intentar capturar la información agrupando por "contenedores padre" tradicionales (divs con clases como **.card** o atributos **data-automation**) hacía que el script se clavara devolviendo **0 resultados**, ya que TripAdvisor ofusca y cambia el nombre de sus clases de diseño frecuentemente en producción.
 
----
+* La Solución Estricta por Expresiones Regulares (Regex): Se migró a un filtro basado en patrones de texto que buscaran el formato de ranking clásico **(r"^\d+\.\s+[A-Za-z]")**.
 
-## 🛠️ Herramientas Disponibles del Agente
+* La Solución Definitiva por URLs Estructurales: Cuando TripAdvisor modificó también el renderizado de los números de ranking en pantalla, cambiamos la estrategia radicalmente hacia un enfoque inmune a cambios estéticos: indexar por patrones de URL internas. El script pasó a capturar todos los enlaces (etiqueta ancla) que apuntan de forma nativa a **/Restaurant_Review-**, asegurando el 100% de efectividad ya que la plataforma no puede alterar su arquitectura de enlaces profunda sin romper su propio sitio web.
 
-El agente tiene acceso a un kit de herramientas escritas en Python para interactuar con el inventario en tiempo real:
-* `consultar_stock(producto)`: Devuelve las unidades disponibles.
-* `consultar_precio_producto(producto)`: Devuelve el costo unitario en USD.
-* `encontrar_producto_mas_costoso()`: Identifica el ítem de mayor valor.
-* `calcular_valor_total_lista(lista)`: Suma los precios de múltiples artículos de forma masiva.
+## 📊 Estructura de Datos Final Extraída
+Una vez superados los bloqueos y localizado el enlace de cada restaurante, el script navega horizontalmente por los elementos hermanos del DOM para poblar dinámicamente el siguiente esquema de diccionario para la lista **restaurantes_detalhados**:
+````
+Python
+restaurante_info = {
+    "Nombre": "Nombre Limpio extraído del enlace",
+    "Calificacion": "Puntaje real extraído del componente SVG de burbujas",
+    "Cantidad_Resenas": "Contador dinámico de opiniones (ej: 1,004 reviews)",
+    "Tipo_Cocina": "Categoría gastronómica parseada de la tarjeta",
+    "Rango_Precio": "Escala de precios detectada (ej: $$ - $$$)",
+    "Estado_Funcionamiento": "Estado actual de apertura del local",
+    "URL_Restaurante": "Enlace absoluto de TripAdvisor para análisis profundo",
+    "URL_Imagen_Principal": "Enlace directo al CDN de la miniatura de la tarjeta"
+}
+````
+## 🚀 Próximos Pasos en el Pipeline
+Con la data real y dinámica corriendo fluidamente en la consola, este módulo queda listo para:
 
----
+1- Serialización a DataFrames: Conversión directa a matrices tabulares mediante **pd.DataFrame(restaurantes_detalhados)** para auditoría o exportación a CSV/Excel.
 
-## 🚀 Configuración del Proyecto
-
-### Requisitos Previos
-Tener instalado Python 3.10+ y un entorno virtual configurado.
-
-### Instalación de Dependencias
-```bash
-pip install groq python-dotenv
-```
-
-### 🔑 Gestión de Credenciales y Seguridad
-La arquitectura de este proyecto sigue estrictamente las buenas prácticas de desarrollo (12-Factor App) para el manejo de información sensible, separando la lógica de negocio de las credenciales de acceso.
-
-1. El archivo .env (Variables de Envío / Entorno)
-En lugar de "hardcodear" (escribir directamente) las llaves privadas en el código de Python, las credenciales se almacenan localmente en un archivo de configuración llamado .env en la raíz del proyecto. El SDK de los diferentes proveedores y herramientas (como LangGraph o Tavily) están diseñados para buscar de forma nativa e automática estas variables en el entorno del sistema.
-
-## Estructura requerida y actualizada del archivo .env:
-
-```
-# Configuración de Proveedores de LLM
-GEMINI_API_KEY=AIzaSyYourGeminiKeyHere
-GROQ_API_KEY=gsk_YourGroqSecretKeyHere
-
-# Herramientas de Búsqueda Avanzada para Agentes (Web Search)
-TAVILY_API_KEY=tvly-YourTavilyKeyHere
-```
+2- Inyección en Contexto de Agentes: Formatear la lista en estructuras JSON nativas para transferir la data limpia a las ventanas de contexto de los LLMs.
 
 ## 📝 Licencia
 
