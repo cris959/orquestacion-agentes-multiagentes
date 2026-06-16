@@ -19,8 +19,7 @@ Este módulo contiene la implementación de un Agente de Investigación Intelige
 
 El experimento de hoy demostró la madurez del agente en un flujo de 3 pasos bajo el mismo hilo (`thread_id: "22"`):
 
-````
-mermaid
+```mermaid
 graph TD
     A[User: Clima en Kansas] -->|Thread 22| B(LLM: Necesito Herramienta)
     B --> C[Tavily Search: 27.2°C]
@@ -30,7 +29,7 @@ graph TD
     F -->|Guarda en SQLite| G[User: ¿Cuál está más caliente?]
     G -->|Thread 22| H(LLM: Lee Historial SQLite)
     H -->|Resolución Directa| I[Resultado: Kansas City 27.2°C > BA 14.3°C]
-````
+```
 
 Análisis del Mensaje de Entrada (Payload Hidratado)
 Al inspeccionar el objeto **stream**, se validó cómo LangGraph concatena el historial transformándolo en el contexto del modelo (**prompt_tokens** incrementales):
