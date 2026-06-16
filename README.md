@@ -1,56 +1,68 @@
 
-## 🍽️ Scraper de Restaurantes de TripAdvisor con Selenium y BeautifulSoup
-Este módulo forma parte de un pipeline de datos e Inteligencia Artificial diseñado para extraer, estructurar y limpiar información real sobre establecimientos gastronómicos en Tulum, México. La data obtenida se procesa y organiza en diccionarios estandarizados listos para alimentar modelos de lenguaje (LLMs) o estructuras de análisis de datos (Pandas DataFrames).
+# LangGraph Agent: Persistencia y Gestión de Estado con SQLite
 
-## ⚔️ La Batalla del Web Scraping: Desafíos y Soluciones
-Extraer datos de plataformas globales como TripAdvisor no es una tarea lineal. A lo largo del desarrollo de este script, nos enfrentamos a fuertes mecanismos de seguridad y cambios dinámicos en la interfaz que requirieron reestructurar la estrategia de raspado varias veces.
+Este módulo contiene la implementación de un Agente de Investigación Inteligente capaz de consultar herramientas externas (Tavily Search API) y mantener una memoria conversacional a largo plazo utilizando un sistema de checkpoints basado en SQLite.
 
-A continuación se detallan los principales obstáculos y cómo los vencimos:
+## 🚀 Lo Aprendido Hoy
 
-1. El Muro de Cloudflare (Sistemas Anti-Bot)
-* El Problema: Al ejecutar Selenium en modo oculto (**--headless**), TripAdvisor bloqueaba la sesión inmediatamente a través de Cloudflare. El script devolvía el código HTML de la pantalla de verificación humana y el título de la página quedaba congelado en tripadvisor.com, impidiendo ver el contenido real del restaurante.
+### 1. Mecánica Interna del State en LangGraph
+* **Grafos con Estado (Stateful Graphs):** Comprendí cómo el estado (`State`) fluye y se actualiza de forma acumulativa a través de una lista de mensajes (`messages: Annotated[list, add_messages]`).
+* **Inferencia de Contexto:** El LLM no posee intuición. Su capacidad de responder a preguntas relativas (ej. *"¿Cuál es más caliente?"*) depende exclusivamente de la hidratación correcta del historial de mensajes que recibe en cada invocación.
 
-* La Solución: * Se desactivó temporalmente el modo headless para permitir que el navegador emulara un entorno con monitor real.
+### 2. Arquitectura de Persistencia (Memory Checkpointing)
+* **El Rol del `thread_id`:** Aprendí que el `thread_id` actúa como una llave primaria de sesión (sala de chat). Si se fragmentan los IDs entre consultas, el agente pierde el contexto, quedando amnésico y forzando llamadas redundantes o erróneas a las herramientas.
+* **Reducción de Latencia y Costos:** Al unificar el `thread_id`, el agente almacena en la base de datos `checkpoints.db` los outputs de las herramientas (`ToolMessage`). En consultas posteriores de comparación, el LLM resuelve la lógica matemáticamente consultando su memoria interna en SQLite, **evitando llamadas innecesarias a la API de Tavily (0% Tool Calls en el paso de comparación)**.
 
-* Se inyectaron argumentos avanzados a las opciones de Chrome para camuflar la automatización (**--disable-blink-features=AutomationControlled, excludeSwitches**).
+---
 
-* Se implementó un comando CDP (**Page.addScriptToEvaluateOnNewDocument**) en caliente para borrar la huella digital del objeto **navigator.webdriver**.
+## 🛠️ Flujo de Ejecución y Anatomía del Log
 
-* Se aumentó el tiempo de espera (**time.sleep(8)**) para permitir el handshake correcto de la página antes de capturar el árbol de elementos.
+El experimento de hoy demostró la madurez del agente en un flujo de 3 pasos bajo el mismo hilo (`thread_id: "22"`):
 
-2. Redirección Involuntaria a URLs Individuales
-* El Problema: Las búsquedas iniciales del agente automatizado redirigían el script hacia la página de un único restaurante específico (como Wild Tulum), lo que rompía la lógica del bucle que buscaba listar múltiples tarjetas de locales comerciales en una sola corrida.
-
-* La Solución: Se interceptó el flujo inyectando manualmente la URL del listado general indexado de Tulum (**/Restaurants-g150813-...**), garantizando la presencia masiva de tarjetas en el HTML capturado.
-
-3. Mutación de Clases CSS y Estructuras Dinámicas
-* El Problema: Intentar capturar la información agrupando por "contenedores padre" tradicionales (divs con clases como **.card** o atributos **data-automation**) hacía que el script se clavara devolviendo **0 resultados**, ya que TripAdvisor ofusca y cambia el nombre de sus clases de diseño frecuentemente en producción.
-
-* La Solución Estricta por Expresiones Regulares (Regex): Se migró a un filtro basado en patrones de texto que buscaran el formato de ranking clásico **(r"^\d+\.\s+[A-Za-z]")**.
-
-* La Solución Definitiva por URLs Estructurales: Cuando TripAdvisor modificó también el renderizado de los números de ranking en pantalla, cambiamos la estrategia radicalmente hacia un enfoque inmune a cambios estéticos: indexar por patrones de URL internas. El script pasó a capturar todos los enlaces (etiqueta ancla) que apuntan de forma nativa a **/Restaurant_Review-**, asegurando el 100% de efectividad ya que la plataforma no puede alterar su arquitectura de enlaces profunda sin romper su propio sitio web.
-
-## 📊 Estructura de Datos Final Extraída
-Una vez superados los bloqueos y localizado el enlace de cada restaurante, el script navega horizontalmente por los elementos hermanos del DOM para poblar dinámicamente el siguiente esquema de diccionario para la lista **restaurantes_detalhados**:
 ````
-Python
-restaurante_info = {
-    "Nombre": "Nombre Limpio extraído del enlace",
-    "Calificacion": "Puntaje real extraído del componente SVG de burbujas",
-    "Cantidad_Resenas": "Contador dinámico de opiniones (ej: 1,004 reviews)",
-    "Tipo_Cocina": "Categoría gastronómica parseada de la tarjeta",
-    "Rango_Precio": "Escala de precios detectada (ej: $$ - $$$)",
-    "Estado_Funcionamiento": "Estado actual de apertura del local",
-    "URL_Restaurante": "Enlace absoluto de TripAdvisor para análisis profundo",
-    "URL_Imagen_Principal": "Enlace directo al CDN de la miniatura de la tarjeta"
-}
+mermaid
+graph TD
+    A[User: Clima en Kansas] -->|Thread 22| B(LLM: Necesito Herramienta)
+    B --> C[Tavily Search: 27.2°C]
+    C -->|Guarda en SQLite| D[User: Clima en Buenos Aires]
+    D -->|Thread 22| E(LLM: Necesito Herramienta)
+    E --> F[Tavily Search: 14.3°C]
+    F -->|Guarda en SQLite| G[User: ¿Cuál está más caliente?]
+    G -->|Thread 22| H(LLM: Lee Historial SQLite)
+    H -->|Resolución Directa| I[Resultado: Kansas City 27.2°C > BA 14.3°C]
 ````
-## 🚀 Próximos Pasos en el Pipeline
-Con la data real y dinámica corriendo fluidamente en la consola, este módulo queda listo para:
 
-1- Serialización a DataFrames: Conversión directa a matrices tabulares mediante **pd.DataFrame(restaurantes_detalhados)** para auditoría o exportación a CSV/Excel.
+Análisis del Mensaje de Entrada (Payload Hidratado)
+Al inspeccionar el objeto **stream**, se validó cómo LangGraph concatena el historial transformándolo en el contexto del modelo (**prompt_tokens** incrementales):
 
-2- Inyección en Contexto de Agentes: Formatear la lista en estructuras JSON nativas para transferir la data limpia a las ventanas de contexto de los LLMs.
+1- **SystemMessage**: Directivas de comportamiento del agente.
+
+2- **HumanMessage** (Kansas) + **AIMessage** (Tool Call) + ToolMessage (JSON con **temp_c: 27.2**).
+
+3- **HumanMessage** (Buenos Aires) + **AIMessage** (Tool Call) + **ToolMessage** (JSON con **temp_c: 14.3**).
+
+4- **HumanMessage** (Comparación): Evaluado directamente sin activar el nodo de acción.
+
+💻 Código de Validación Implementado
+Bloque de código corregido para la captura limpia y filtrado de eventos en la etapa de decisión:
+
+````Python
+print("\n--- Pergunta 4: Comparación ---")
+
+messages = [HumanMessage(content="¿Cuál ciudad está más caliente de las dos?")]
+thread = {"configurable": {"thread_id": "22"}}  # #Hilo persistente con el historial cargado
+
+for event in abot.graph.stream({"messages": messages}, thread):
+    for k, v in event.items():
+        # Filtrado semántico según los nodos del grafo del curso
+        if k in ("call_groq", "take_action"):
+            # Acceso directo al último elemento de la lista de mensajes para evitar verbosidad
+            print(f"[{k}]: {v['messages'][-1].content}")
+````
+
+## 🎯 Conclusión Técnica
+
+La persistencia nativa de LangGraph mediante Checkpointers transforma un modelo stateless (sin estado) en un agente capaz de resolver flujos conversacionales complejos complejos. El control estricto sobre el ciclo de vida del **thread_id** es el factor crítico de éxito para optimizar el consumo de tokens y asegurar la coherencia en las respuestas del sistema.
 
 ## 📝 Licencia
 
