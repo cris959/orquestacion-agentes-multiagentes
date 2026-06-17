@@ -21,15 +21,43 @@ El experimento de hoy demostró la madurez del agente en un flujo de 3 pasos baj
 
 ```mermaid
 graph TD
-    A["User: Clima en Kansas"] -->|Thread 22| B["LLM: Necesito Herramienta"]
-    B --> C["Tavily Search: 27.2°C"]
-    C -->|Guarda en SQLite| D["User: Clima en Buenos Aires"]
-    D -->|Thread 22| E["LLM: Necesito Herramienta"]
-    E --> F["Tavily Search: 14.3°C"]
-    F -->|Guarda en SQLite| G["User: ¿Cuál está más caliente?"]
-    G -->|Thread 22| H["LLM: Lee Historial SQLite"]
-    H -->|Resolución Directa| I["Resultado: Kansas City 27.2°C vs BA 14.3°C"]
+    %% Definicion de Nodos de Usuario
+    U1["Pregunta 1 (Thread 22): Clima Kansas"]:::user
+    U2["Pregunta 2 (Thread 22): Clima Medellin"]:::user
+    U3["Pregunta 3 (Thread 22): Cual es mas caliente?"]:::user
+
+    %% Definicion de Nodos de Procesamiento
+    A1["LLM: Requiere busqueda"]:::process
+    A2["Tavily API: Retorna 27.2C"]:::tool
+    A3["Guardado en SQLite"]:::db
+
+    B1["LLM: Requiere busqueda"]:::process
+    B2["Tavily API: Retorna 14.3C"]:::tool
+    B3["Guardado en SQLite"]:::db
+
+    C1["LLM: Lee Historial SQLite"]:::process
+    C2["Resultado Directo: Kansas City es mayor que BA"]:::success
+
+    %% Flujo de Conexion
+    U1 --> A1
+    A1 --> A2
+    A2 --> A3
+
+    U2 --> B1
+    B1 --> B2
+    B2 --> B3
+
+    U3 --> C1
+    C1 --> C2
+
+    %% Estilos Visuales Premium
+    classDef user fill:#2e7d32,stroke:#1b5e20,stroke-width:2px,color:#ffffff
+    classDef process fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#ffffff
+    classDef tool fill:#f57c00,stroke:#e65100,stroke-width:2px,color:#ffffff
+    classDef db fill:#37474f,stroke:#263238,stroke-width:2px,color:#ffffff
+    classDef success fill:#2e7d32,stroke:#1b5e20,stroke-width:2px,color:#ffffff
 ```
+
 
 Análisis del Mensaje de Entrada (Payload Hidratado)
 Al inspeccionar el objeto **stream**, se validó cómo LangGraph concatena el historial transformándolo en el contexto del modelo (**prompt_tokens** incrementales):
