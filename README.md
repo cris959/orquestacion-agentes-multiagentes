@@ -1,70 +1,80 @@
 
-# 🤖 Orquestación de Agentes con Arquitectura ReAct
+## 🤖 Clase 05: Agentes Inteligentes con Persistencia y Control Humano (Human-in-the-Loop)
 
-Este proyecto implementa un agente inteligente utilizando el patrón de diseño **ReAct** (Reasoning and Acting) para la gestión e interacción interactiva con un sistema de inventario simulado. 
+¡Bienvenido al módulo de la Clase 05! En esta sección migramos nuestra arquitectura de agentes basada en el ecosistema de Google hacia Groq utilizando el modelo avanzado de código abierto **llama-3.3-70b-versatile**.
 
-Originalmente desarrollado sobre el ecosistema de Google Gemini, el backend fue migrado estratégicamente hacia **Groq (Llama 3.3)** para optimizar la velocidad de respuesta y evadir las estrictas limitaciones de cuota (*Rate Limits*) por IP.
+El objetivo principal de esta clase fue dominar el diseño de grafos de ejecución cíclicos con LangGraph, implementar almacenamiento persistente local mediante un checkpointer en SQLite, y diseñar un flujo crítico de Intervención Humana (Human-in-the-Loop).
 
----
+## 🚀 Desafíos Clave Resueltos
 
-## 🧭 ¿Qué es la Arquitectura ReAct?
+1. Migración y Optimización del Entorno (Groq)
 
-El patrón ReAct combina la capacidad de los Modelos de Lenguaje (LLMs) para generar trazas de razonamiento (*Reasoning*) junto con la ejecución de acciones específicas basadas en herramientas (*Acting*). El agente sigue un bucle continuo de tres pasos:
+* Adiós Gemini, Hola Llama 3.3: Rediseñamos las celdas de inicialización para desconectar las dependencias de Google e integrar la librería oficial **langchain-groq**.
 
-1. **Pensamiento (Thought):** El modelo analiza la entrada y decide qué necesita saber o hacer.
-2. **Acción (Action):** El modelo invoca una herramienta externa (ej. `consultar_stock`, `calcular_precio`).
-3. **Observación (Observation):** El sistema ejecuta el código en Python, le devuelve el resultado real al modelo, y este decide si ya puede dar la respuesta final o si necesita usar otra herramienta.
+* Estabilización en Windows: Corregimos los errores de bloqueo del Kernel de Jupyter (Restarting Kernel) provocados por la mutación de librerías en caliente, abstrayendo las instalaciones pesadas de pip directamente hacia la terminal nativa con control de procesos (**taskkill**).
 
----
+2. Reductor de Mensajes Personalizado (State Management)
 
-## ⚡ El Desafío Técnico: De Gemini a Groq
+* Desarrollamos una función de reducción síncrona **reduce_messages** para el estado del agente (**AgentState**).
 
-### 1. El Problema (Google Gemini)
-Durante las pruebas con el modelo `gemini-2.5-flash`, el ciclo continuo de llamadas rápidas que requiere el bucle ReAct colapsó la cuota gratuita de la API de Google por minuto. Esto generaba errores de tipo `ResourceExhausted (429)` y bloqueos de IP prolongados (con penalizaciones de reintento de casi un minuto por interacción), rompiendo la experiencia interactiva por consola.
+* Control de Inmutabilidad: Resolvimos las restricciones de inmutabilidad de los modelos de Pydantic en LangChain asignando UUIDs de manera segura a los mensajes entrantes sin corromper el flujo.
 
-### 2. La Solución (Groq + Llama 3.3 70B)
-Para resolver la asfixia de la cuota, migramos el motor del agente al cliente de **Groq**, utilizando el modelo **`llama-3.3-70b-versatile`**. 
-* **Ventajas:** Procesamiento en milisegundos, latencia ultra baja y límites de cuota por minuto drásticamente más amplios para entornos de desarrollo.
-* **Control de Alucinaciones:** Se implementó el parámetro de parada `stop=["PAUSA", "Observación:"]` en la API de Groq para forzar al modelo a congelar su generación de texto inmediatamente después de declarar una acción. Esto evita que el LLM "invente" las respuestas de las herramientas y garantiza que Python tome el control de la lógica de negocio.
+3. Arquitectura del Agente con Interrupción
 
----
+* Construimos un grafo de estado dirigido utilizando **StateGraph** compuesto por dos nodos principales: llm (orquestador del modelo) y **action** (ejecutor de herramientas como **TavilySearchResults**).
 
-## 🛠️ Herramientas Disponibles del Agente
+* Implementamos la bandera de interrupción nativa **interrupt_before=["action"]** para congelar el hilo de ejecución inmediatamente antes de que el agente realice llamadas externas a internet.
 
-El agente tiene acceso a un kit de herramientas escritas en Python para interactuar con el inventario en tiempo real:
-* `consultar_stock(producto)`: Devuelve las unidades disponibles.
-* `consultar_precio_producto(producto)`: Devuelve el costo unitario en USD.
-* `encontrar_producto_mas_costoso()`: Identifica el ítem de mayor valor.
-* `calcular_valor_total_lista(lista)`: Suma los precios de múltiples artículos de forma masiva.
+4. Flujo Human-in-the-Loop (Modificación de Estado en SQLite)
 
----
+* Auditoría de Checkpoints: Inspeccionamos los metadatos almacenados en la base de datos **checkpoints.db** para analizar los identificadores de sesión (**thread_id**) y las llaves de control internas (**checkpoint_id**).
 
-## 🚀 Configuración del Proyecto
+* Inyección de Respuestas: Diseñamos un flujo donde el usuario puede denegar el uso de una herramienta e inyectar un mensaje manual (**AIMessage**). El agente procesa esta corrección a través de **graph.update_state()**, pisando el estado anterior en el disco, cancelando la acción pendiente y cerrando el grafo de forma segura.
 
-### Requisitos Previos
-Tener instalado Python 3.10+ y un entorno virtual configurado.
+## 🛠️ Tecnologías y Dependencias Utilizadas
 
-### Instalación de Dependencias
-```bash
-pip install groq python-dotenv
+* Orquestador Central: **langgraph** (v0.x)
+
+* Motor de Inferencia: **langchain-groq** (Modelo: **llama-3.3-70b-versatile**)
+
+* Herramientas (Tools): **langchain-community** & **tavily-python** (Búsquedas en tiempo real)
+
+* Persistencia: **langgraph-checkpoint-sqlite** & **aiosqlite**
+
+Entorno: VS Code en entorno Windows con Python 3.10+ y variables de entorno gestionadas vía .env.
+
+## 📊 Estructura del Grafo del Agente
+
+El flujo operativo diseñado para este asistente de investigación sigue el siguiente ciclo de control:
+```mermaid
+graph TD
+    START((START)) --> LLM[Nodo: llm / ChatGroq]
+    LLM --> Conditional{¿Requiere Herramientas?}
+    Conditional -- True --> Interruption[PAUSA: Intervención Humana]
+    Conditional -- False --> END((END))
+    
+    Interruption -->|"Aprobado: stream(None)"| Action[Nodo: action / Tavily]
+    Action --> LLM
+    
+    Interruption -->|"Rechazado: update_state"| Injected[Inyección de AIMessage Manual]
+    Injected --> END
+
 ```
 
-### 🔑 Gestión de Credenciales y Seguridad
-La arquitectura de este proyecto sigue estrictamente las buenas prácticas de desarrollo (12-Factor App) para el manejo de información sensible, separando la lógica de negocio de las credenciales de acceso.
+## 📝 Instrucciones de Ejecución (Machete para Windows)
 
-1. El archivo .env (Variables de Envío / Entorno)
-En lugar de "hardcodear" (escribir directamente) las llaves privadas en el código de Python, las credenciales se almacenan localmente en un archivo de configuración llamado .env en la raíz del proyecto. El SDK de los diferentes proveedores y herramientas (como LangGraph o Tavily) están diseñados para buscar de forma nativa e automática estas variables en el entorno del sistema.
+Si el entorno se congela o necesitas iniciar el cuaderno desde cero, sigue estos pasos en orden:
 
-## Estructura requerida y actualizada del archivo .env:
+1- Matar procesos zombie de Python (Terminal de Windows):
+````
+taskkill /f /im python.exe
+````
 
-```
-# Configuración de Proveedores de LLM
-GEMINI_API_KEY=AIzaSyYourGeminiKeyHere
-GROQ_API_KEY=gsk_YourGroqSecretKeyHere
-
-# Herramientas de Búsqueda Avanzada para Agentes (Web Search)
-TAVILY_API_KEY=tvly-YourTavilyKeyHere
-```
+2- Activar el entorno virtual e instalar las dependencias limpias:
+````
+.venv\Scripts\Activate.ps1
+pip install -U langchain langchain-groq langchain-community langgraph langgraph-checkpoint-sqlite tavily-python langchain-tavily aiosqlite python-dotenv
+````
 
 ## 📝 Licencia
 
