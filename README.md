@@ -1,70 +1,85 @@
 
-# 🤖 Orquestación de Agentes con Arquitectura ReAct
+## 📬 Sistema Multi-Agente de Triaje y Respuesta de Emails con LangGraph
 
-Este proyecto implementa un agente inteligente utilizando el patrón de diseño **ReAct** (Reasoning and Acting) para la gestión e interacción interactiva con un sistema de inventario simulado. 
+Este repositorio contiene el desarrollo práctico de la **Clase 07: Creando un Asistente de Email**. El objetivo del proyecto es construir un sistema de orquestación multi-agente capaz de recibir correos entrantes, clasificarlos según reglas de negocio corporativas y delegar la redacción técnica de las respuestas a un agente ReAct motorizado por **Groq (Llama 3.3)**.
 
-Originalmente desarrollado sobre el ecosistema de Google Gemini, el backend fue migrado estratégicamente hacia **Groq (Llama 3.3)** para optimizar la velocidad de respuesta y evadir las estrictas limitaciones de cuota (*Rate Limits*) por IP.
-
----
-
-## 🧭 ¿Qué es la Arquitectura ReAct?
-
-El patrón ReAct combina la capacidad de los Modelos de Lenguaje (LLMs) para generar trazas de razonamiento (*Reasoning*) junto con la ejecución de acciones específicas basadas en herramientas (*Acting*). El agente sigue un bucle continuo de tres pasos:
-
-1. **Pensamiento (Thought):** El modelo analiza la entrada y decide qué necesita saber o hacer.
-2. **Acción (Action):** El modelo invoca una herramienta externa (ej. `consultar_stock`, `calcular_precio`).
-3. **Observación (Observation):** El sistema ejecuta el código en Python, le devuelve el resultado real al modelo, y este decide si ya puede dar la respuesta final o si necesita usar otra herramienta.
+## 🛠️ Tecnologías Utilizadas
+* **Python 3.14** (Entorno Virtual `.venv`)
+* **LangGraph & LangChain** (Orquestación de grafos de estado y agentes ReAct)
+* **Pydantic v2** (Garantía de salida estructurada)
+* **Groq API** (`llama-3.3-70b-versatile` para inferencia de alta velocidad y baja latencia)
 
 ---
 
-## ⚡ El Desafío Técnico: De Gemini a Groq
+## 🚀 Arquitectura del Grafo
 
-### 1. El Problema (Google Gemini)
-Durante las pruebas con el modelo `gemini-2.5-flash`, el ciclo continuo de llamadas rápidas que requiere el bucle ReAct colapsó la cuota gratuita de la API de Google por minuto. Esto generaba errores de tipo `ResourceExhausted (429)` y bloqueos de IP prolongados (con penalizaciones de reintento de casi un minuto por interacción), rompiendo la experiencia interactiva por consola.
+El flujo de control se gestiona mediante un `StateGraph` que utiliza un estado compartido (`State`) basado en `TypedDict` para almacenar el diccionario del email entrante (`email_input`) y el historial de conversación (`messages`).
 
-### 2. La Solución (Groq + Llama 3.3 70B)
-Para resolver la asfixia de la cuota, migramos el motor del agente al cliente de **Groq**, utilizando el modelo **`llama-3.3-70b-versatile`**. 
-* **Ventajas:** Procesamiento en milisegundos, latencia ultra baja y límites de cuota por minuto drásticamente más amplios para entornos de desarrollo.
-* **Control de Alucinaciones:** Se implementó el parámetro de parada `stop=["PAUSA", "Observación:"]` en la API de Groq para forzar al modelo a congelar su generación de texto inmediatamente después de declarar una acción. Esto evita que el LLM "invente" las respuestas de las herramientas y garantiza que Python tome el control de la lógica de negocio.
+1. **`START`** ➡️ El flujo inicia enviando el input al nodo de triaje.
+2. **`triage_router`** ➡️ Clasifica el correo. Si el resultado es `"respond"`, actualiza el estado inyectando el comando y desvía el flujo al agente. Si es `"ignore"` o `"notify"`, el flujo finaliza en el nodo especial `__end__`.
+3. **`response_agent`** ➡️ Agente ReAct encargado de generar la respuesta corporativa final utilizando el contexto heredado.
 
 ---
 
-## 🛠️ Herramientas Disponibles del Agente
+## 🧠 Desafíos Técnicos Resueltos y Aprendizajes Clave
 
-El agente tiene acceso a un kit de herramientas escritas en Python para interactuar con el inventario en tiempo real:
-* `consultar_stock(producto)`: Devuelve las unidades disponibles.
-* `consultar_precio_producto(producto)`: Devuelve el costo unitario en USD.
-* `encontrar_producto_mas_costoso()`: Identifica el ítem de mayor valor.
-* `calcular_valor_total_lista(lista)`: Suma los precios de múltiples artículos de forma masiva.
+Durante el desarrollo de esta clase, nos enfrentamos a varios desafíos críticos de arquitectura en sistemas multi-agente:
 
----
+### 1. Control de Loops Infinitos en Agentes ReAct (`recursion_limit`)
+* **Problema:** Al procesar correos que requerían una respuesta compleja (como el caso de prueba de Alice consultando por endpoints de la API), el agente de respuesta entraba en un bucle infinito (*loop*) intentando razonar o buscar herramientas inexistentes, consumiendo cuotas de la API de Groq sin detenerse.
+* **Solución:** Se implementó un freno de mano de seguridad inyectando un límite de recursión en la configuración del `.invoke()`:
+  
+  ```
+  python
+  
+  configuracion = {"recursion_limit": 10}
+  response = app.invoke({"email_input": email_input}, config=configuracion)
+  ```
+Esto garantiza que el grafo se interrumpa de forma segura si realiza más de 10 saltos entre nodos.
 
-## 🚀 Configuración del Proyecto
+2. Error de Atributo en AIMessage (**'AIMessage' object has no attribute 'classification'**)
+* Problema: El LLM en el enrutador (**llm_router.invoke**) devolvía texto plano envuelto en un objeto **AIMessage**, rompiendo la validación condicional **result.classification == "respond"** ya que las propiedades personalizadas no existen de forma nativa en los mensajes de chat.
 
-### Requisitos Previos
-Tener instalado Python 3.10+ y un entorno virtual configurado.
-
-### Instalación de Dependencias
-```bash
-pip install groq python-dotenv
-```
-
-### 🔑 Gestión de Credenciales y Seguridad
-La arquitectura de este proyecto sigue estrictamente las buenas prácticas de desarrollo (12-Factor App) para el manejo de información sensible, separando la lógica de negocio de las credenciales de acceso.
-
-1. El archivo .env (Variables de Envío / Entorno)
-En lugar de "hardcodear" (escribir directamente) las llaves privadas en el código de Python, las credenciales se almacenan localmente en un archivo de configuración llamado .env en la raíz del proyecto. El SDK de los diferentes proveedores y herramientas (como LangGraph o Tavily) están diseñados para buscar de forma nativa e automática estas variables en el entorno del sistema.
-
-## Estructura requerida y actualizada del archivo .env:
+* Solución: Implementamos salida estructurada forzada combinando un esquema de Pydantic con el método **.with_structured_output()** de LangChain:
 
 ```
-# Configuración de Proveedores de LLM
-GEMINI_API_KEY=AIzaSyYourGeminiKeyHere
-GROQ_API_KEY=gsk_YourGroqSecretKeyHere
+Python
 
-# Herramientas de Búsqueda Avanzada para Agentes (Web Search)
-TAVILY_API_KEY=tvly-YourTavilyKeyHere
+from pydantic import BaseModel, Field
+
+class TriageOutput(BaseModel):
+    classification: Literal["respond", "ignore", "notify"] = Field(...)
+
+llm_router = llm_base.with_structured_output(TriageOutput)
 ```
+Esto obligó al modelo Llama 3.3 a responder con un JSON estricto que Python parsea nativamente con la propiedad requerida.
+
+3. Actualización de Sintaxis en LangGraph (**state_modifier** vs **prompt**)
+* Problema: El constructor preconstruido de agentes **create_react_agent** arrojaba un **TypeError** al intentar pasarle las instrucciones del sistema mediante la propiedad obsoleta **state_modifier**.
+
+* Solución: Se migró la sintaxis a los estándares actuales de LangGraph, reemplazando el argumento por **prompt**:
+
+```
+Python
+
+agent = create_react_agent(model=llm, tools=[], prompt="Sos un asistente corporativo experto...")
+```
+4. Rehidratación de Memoria tras Reinicios de Kernel
+* Problema: Al interrumpir o reiniciar el Kernel de Jupyter para frenar los bucles infinitos, la memoria dinámica se limpiaba por completo provocando errores en cascada de tipo **NameError** (**State is not defined, triage_router is not defined, app is not defined**).
+
+* Solución: Se diseñó un script de inicialización acoplado y centralizado en una única celda que declara contratos de tipado, inicializa modelos, compila el grafo e inyecta los mocks de datos (**email_input, profile, prompt_instructions**) de un solo tirón, garantizando idempotencia en el entorno de desarrollo.
+
+5. Formateo y Visualización de Trazas (**pretty_print**)
+* Problema: El print tradicional del último mensaje ocultaba el flujo interno de LangGraph y los metadatos de las interacciones.
+
+* Solución: Se implementó el bucle iterativo nativo de LangChain para renderizar de manera estética el ciclo de vida del estado en la consola:
+```
+Python
+
+for m in response["messages"]:
+    m.pretty_print()
+```
+Esto permitió contrastar visualmente cómo un agente con herramientas (**tools=[write_email]**) genera un mensaje con metadatos de **Tool Calls** y **Call ID**, a diferencia de un agente sin herramientas integradas (**tools=[]**) que responde con texto plano directo en el atributo **content**.
 
 ## 📝 Licencia
 
