@@ -14,3 +14,6 @@ env/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+checkpoints.db
+Clase_03_Agente_de_Busqueda.ipynb
