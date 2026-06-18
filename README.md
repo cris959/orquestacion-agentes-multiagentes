@@ -18,7 +18,50 @@ El flujo de control se gestiona mediante un `StateGraph` que utiliza un estado c
 1. **`START`** ➡️ El flujo inicia enviando el input al nodo de triaje.
 2. **`triage_router`** ➡️ Clasifica el correo. Si el resultado es `"respond"`, actualiza el estado inyectando el comando y desvía el flujo al agente. Si es `"ignore"` o `"notify"`, el flujo finaliza en el nodo especial `__end__`.
 3. **`response_agent`** ➡️ Agente ReAct encargado de generar la respuesta corporativa final utilizando el contexto heredado.
+---
 
+### 🗺️ Diagrama de Flujo del Grafo
+
+```mermaid
+graph TD
+    Start((START))
+    Router[Node: triage_router<br><i>with_structured_output</i>]
+    Agent[Node: response_agent<br><i>ReAct Agent / tools&#91;&#93;</i>]
+    End((__end__))
+
+    classDef startEnd fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724;
+    classDef routerClass fill:#cce5ff,stroke:#004085,stroke-width:2px,color:#004085;
+    classDef agentClass fill:#fff3cd,stroke:#856404,stroke-width:2px,color:#856404;
+
+    class Start,End startEnd;
+    class Router routerClass;
+    class Agent agentClass;
+
+    Start -->|Inyecta email_input| Router
+    Router -->|classification == 'respond'| Agent
+    Router -->|classification == 'ignore'| End
+    Router -->|classification == 'notify'| End
+    Agent -->|Genera AiMessage corporativo| End
+```
+---
+## 🧠 Fundamentos Teóricos e Implementación Conceptual
+
+Más allá de la lógica del grafo, durante esta sesión se integraron pilares esenciales de la ingeniería de agentes y el modelado de datos:
+
+### 1. Taxonomía de la Memoria en Agentes de IA
+Para lograr que los agentes interactúen de forma eficiente y contextual, analizamos los tres tipos de memoria fundamentales:
+* **Memoria Semántica:** Estructuración del conocimiento general, conceptos y hechos del mundo que el agente utiliza para razonar (en este caso, el entendimiento del protocolo de comunicación y la sintaxis de las APIs).
+* **Memoria Episódica:** El registro de las experiencias y secuencias de eventos pasados (representado por el historial acumulado en el campo `messages` del estado del grafo).
+* **Memoria Procedimental:** Las reglas, flujos y "habilidades" que dictan *cómo* hacer las cosas (codificado directamente en las transiciones de nuestros nodos y la lógica del enrutador).
+
+### 2. Perfilamiento Dinámico de Usuarios (User Profiling)
+Utilizando estructuras nativas de diccionarios en Python, modelamos el contexto del usuario (`profile`) y las directrices operativas (`prompt_instructions`). Esto permite que el sistema desacople la identidad del usuario de la lógica dura del código, logrando que el Agente adapte su tono, criticidad y respuestas de manera 100% personalizada según quién esté recibiendo el correo.
+
+### 3. Modelado Estructurado y Validación con Pydantic
+La integración de **Pydantic v2** fue clave para transformar respuestas de texto plano generativo en tipos de datos estrictos y tipados para el backend. Al definir esquemas basados en `BaseModel`, garantizamos:
+* Validación automatizada de tipos de datos en tiempo de ejecución.
+* Cotejo estricto de estructuras de decisión para el enrutador (`Literal["respond", "ignore", "notify"]`).
+* Mapeo limpio y seguro de objetos JSON complejos hacia lógica condicional de Python.
 ---
 
 ## 🧠 Desafíos Técnicos Resueltos y Aprendizajes Clave
