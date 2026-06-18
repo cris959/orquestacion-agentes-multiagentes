@@ -14,3 +14,13 @@ env/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+Clase_03_Agente_de_Busqueda.ipynb
+
+# Bases de datos de LangGraph (Persistencia local)
+*.db
+*.sqlite
+
+# Cache de Python y Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

@@ -1,71 +1,77 @@
 
-# 🤖 Orquestación de Agentes con Arquitectura ReAct
 
-Este proyecto implementa un agente inteligente utilizando el patrón de diseño **ReAct** (Reasoning and Acting) para la gestión e interacción interactiva con un sistema de inventario simulado. 
+## 🤖 Orquestador Multi-Agente Cíclico con LangGraph y Gradio
 
-Originalmente desarrollado sobre el ecosistema de Google Gemini, el backend fue migrado estratégicamente hacia **Groq (Llama 3.3)** para optimizar la velocidad de respuesta y evadir las estrictas limitaciones de cuota (*Rate Limits*) por IP.
+Este proyecto implementa un pipeline de orquestación multi-agente cíclico utilizando **LangGraph**, **LangChain** y **Groq (Llama 3.3)**. El sistema simula un flujo de trabajo académico/profesional de investigación y redacción técnica, donde las propuestas y borradores pasan por un proceso de crítica y refinamiento en bucle controlado por variables de estado y persistencia local.
 
----
-
-## 🧭 ¿Qué es la Arquitectura ReAct?
-
-El patrón ReAct combina la capacidad de los Modelos de Lenguaje (LLMs) para generar trazas de razonamiento (*Reasoning*) junto con la ejecución de acciones específicas basadas en herramientas (*Acting*). El agente sigue un bucle continuo de tres pasos:
-
-1. **Pensamiento (Thought):** El modelo analiza la entrada y decide qué necesita saber o hacer.
-2. **Acción (Action):** El modelo invoca una herramienta externa (ej. `consultar_stock`, `calcular_precio`).
-3. **Observación (Observation):** El sistema ejecuta el código en Python, le devuelve el resultado real al modelo, y este decide si ya puede dar la respuesta final o si necesita usar otra herramienta.
+La aplicación incluye una interfaz web interactiva desarrollada con **Gradio** para facilitar las pruebas y la visualización del comportamiento de los agentes en tiempo real.
 
 ---
 
-## ⚡ El Desafío Técnico: De Gemini a Groq
+## 🏗️ Arquitectura del Grafo
 
-### 1. El Problema (Google Gemini)
-Durante las pruebas con el modelo `gemini-2.5-flash`, el ciclo continuo de llamadas rápidas que requiere el bucle ReAct colapsó la cuota gratuita de la API de Google por minuto. Esto generaba errores de tipo `ResourceExhausted (429)` y bloqueos de IP prolongados (con penalizaciones de reintento de casi un minuto por interacción), rompiendo la experiencia interactiva por consola.
+El flujo sigue la estructura de orquestación analizada en el curso, donde el condicional evalúa el estado del documento saliendo del nodo de generación:
 
-### 2. La Solución (Groq + Llama 3.3 70B)
-Para resolver la asfixia de la cuota, migramos el motor del agente al cliente de **Groq**, utilizando el modelo **`llama-3.3-70b-versatile`**. 
-* **Ventajas:** Procesamiento en milisegundos, latencia ultra baja y límites de cuota por minuto drásticamente más amplios para entornos de desarrollo.
-* **Control de Alucinaciones:** Se implementó el parámetro de parada `stop=["PAUSA", "Observación:"]` en la API de Groq para forzar al modelo a congelar su generación de texto inmediatamente después de declarar una acción. Esto evita que el LLM "invente" las respuestas de las herramientas y garantiza que Python tome el control de la lógica de negocio.
+* **Planner**: Diseña el esquema y la estructura inicial en Markdown basados en la tarea del usuario.
+* **Research Plan**: Realiza una búsqueda inicial en la web utilizando **Tavily Search** para recopilar contexto técnico fundamental.
+* **Generate (Escritor)**: Redacta o mejora el borrador final combinando el plan, la información investigada y las críticas previas.
+* **Reflect (Profesor)**: Evalúa rigurosamente el borrador actual generando una crítica constructiva e incrementando el contador de revisiones.
+* **Research Critique**: Investiga en internet soluciones específicas orientadas a resolver las observaciones del profesor antes de reescribir.
 
----
-
-## 🛠️ Herramientas Disponibles del Agente
-
-El agente tiene acceso a un kit de herramientas escritas en Python para interactuar con el inventario en tiempo real:
-* `consultar_stock(producto)`: Devuelve las unidades disponibles.
-* `consultar_precio_producto(producto)`: Devuelve el costo unitario en USD.
-* `encontrar_producto_mas_costoso()`: Identifica el ítem de mayor valor.
-* `calcular_valor_total_lista(lista)`: Suma los precios de múltiples artículos de forma masiva.
+## 🔄 Flujo de Control (should_continue)
+El grafo utiliza un borde condicional (`add_conditional_edges`) que verifica si el número actual de revisiones superó el límite (`max_revisions`). Si quedan intentos, el flujo se redirige a evaluación y optimización; de lo contrario, finaliza de forma segura enviando el borrador con la máxima calidad alcanzada.
 
 ---
 
-## 🚀 Configuración del Proyecto
+## 🛠️ Requisitos e Instalación
 
-### Requisitos Previos
-Tener instalado Python 3.10+ y un entorno virtual configurado.
+### 1. Clonar el proyecto y preparar el entorno
+````
+Bash
 
-### Instalación de Dependencias
-```bash
-pip install groq python-dotenv
-```
+# Acceder a la carpeta del proyecto
+cd MULTIAGENTES_LANGGRAPH
 
-### 🔑 Gestión de Credenciales y Seguridad
-La arquitectura de este proyecto sigue estrictamente las buenas prácticas de desarrollo (12-Factor App) para el manejo de información sensible, separando la lógica de negocio de las credenciales de acceso.
+# Asegúrate de tener tu entorno virtual activo
+# En Windows:
+.venv\Scripts\activate
+````
+2. Instalar dependencias necesarias
+Asegúrate de contar con los paquetes clave actualizados en tu entorno:
+````
+Bash
 
-1. El archivo .env (Variables de Envío / Entorno)
-En lugar de "hardcodear" (escribir directamente) las llaves privadas en el código de Python, las credenciales se almacenan localmente en un archivo de configuración llamado .env en la raíz del proyecto. El SDK de los diferentes proveedores y herramientas (como LangGraph o Tavily) están diseñados para buscar de forma nativa e automática estas variables en el entorno del sistema.
+pip install langchain-groq langchain-community langgraph gradio python-dotenv
+````
+3. Configuración de Variables de Entorno (**.env**)
+Crea un archivo .env en la raíz del proyecto (este archivo está protegido en el **.gitignore** y no se subirá al repositorio público) con tus credenciales:
+````
+Fragmento de código
 
-## Estructura requerida y actualizada del archivo .env:
+GROQ_API_KEY="tu_api_key_de_groq_aqui"
+TAVILY_API_KEY="tu_api_key_de_tavily_aqui"
+````
+Nota: El sistema utiliza el modelo **llama-3.3-70b-versatile** en Groq para garantizar la compatibilidad y velocidad en la inferencia de los agentes.
 
-```
-# Configuración de Proveedores de LLM
-GEMINI_API_KEY=AIzaSyYourGeminiKeyHere
-GROQ_API_KEY=gsk_YourGroqSecretKeyHere
+## 🚀 Ejecución de la Aplicación
+El proyecto está modularizado para ejecutarse en modo producción (backend aislado) o mediante la interfaz de usuario:
 
-# Herramientas de Búsqueda Avanzada para Agentes (Web Search)
-TAVILY_API_KEY=tvly-YourTavilyKeyHere
-```
+## Interfaz Web (Recomendado)
+Para levantar el servidor local de Gradio y probar el orquestador desde tu navegador web:
+````
+Bash
 
+python app.py
+````
+Abre en tu navegador la URL local indicada en la terminal (ej. **http://127.0.0.1:7860**).
+
+## Consola / Script Base
+Si deseas validar la compilación del grafo y observar el comportamiento de persistencia del **MemorySaver** en la terminal:
+````
+Bash
+
+python new_backend.py
+````
 ## 📝 Licencia
 
 Este proyecto está bajo la Licencia MIT. Para más detalles, consulta el archivo [LICENSE](https://github.com/cris959/orquestacion-agentes-multiagentes/blob/main/LICENSE) adjunto en este repositorio.
